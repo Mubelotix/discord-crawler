@@ -85,7 +85,7 @@ fn main() {
         let start_timestamp = SystemTime::now();
         let mut guilds: Vec<Entry> = Vec::new();
 
-        if let Ok(mut file) = File::open("guilds.json") {
+        if let Ok(mut file) = File::open("guilds.bincode") {
             let mut content = Vec::new();
             if let Ok(_t) = file.read_to_end(&mut content) {
                 if let Ok(saved_guilds) = bincode::deserialize(&content) {
@@ -147,7 +147,7 @@ fn main() {
         guilds.sort();
         guilds.dedup();
 
-        if let Ok(mut file) = File::create("guilds.json") {
+        if let Ok(mut file) = File::create("guilds.bincode") {
             if let Ok(data) = bincode::serialize(&guilds) {
                 if let Ok(()) = file.write_all(&data) {
 
