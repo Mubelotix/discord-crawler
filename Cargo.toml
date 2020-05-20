@@ -10,5 +10,5 @@ clap = "2.33"
 meilisearch-sdk = "0.1"
 pkg-version = "1.0"
 serde = {version="1.0", features=["derive"]}
-bincode = "1.2"
+serde_cbor = "0.11"
 progress_bar = "0.1"

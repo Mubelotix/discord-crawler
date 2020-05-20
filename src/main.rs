@@ -2,7 +2,7 @@ use discord_finder::*;
 use clap::clap_app;
 use pkg_version::*;
 use serde::{Serialize, Deserialize};
-use std::{thread::sleep, time::{Duration, SystemTime, UNIX_EPOCH}, io::prelude::*, fs::File};
+use std::{thread::sleep, time::{Duration, SystemTime, UNIX_EPOCH}, fs::File};
 use meilisearch_sdk::{client::Client, document::Document};
 use progress_bar::{progress_bar::ProgressBar, color::*};
 
@@ -98,33 +98,21 @@ fn main() {
         let start_timestamp = SystemTime::now();
         let mut guilds: Vec<Entry> = Vec::new();
 
-        match File::open("guilds.bincode") {
-            Ok(mut file) => {
-                let mut content = Vec::new();
-                match file.read_to_end(&mut content) {
-                    Ok(_bytes) => match bincode::deserialize(&content) {
-                        Ok(saved_guilds) => {
-                            guilds = saved_guilds;
-                        },
-                        Err(e) => {
-                            eprint!("ERROR: Failed to deserialize data: {:?}.\nSTATUS: Corrupted data may be lost. ", e);
-                            if ask("Do you want to continue and overwrite the saved data? (disrecommended)") {
-                                println!("Data will be overwritten.");
-                            } else {
-                                println!("To fix the problem, visit the Github repos. Feel free to ask for help.");
-                                std::process::exit(74);
-                            };
-                        }
+        match File::open("guilds.cbor") {
+            Ok(file) => {
+                match serde_cbor::from_reader(&file) {
+                    Ok(saved_guilds) => {
+                        guilds = saved_guilds;
                     },
                     Err(e) => {
-                        eprint!("ERROR: Failed to read data: {:?}.\nSTATUS: Potential data loss. ", e);
-                        if ask("Do you want to continue and overwrite the saved data (which cannot be read) ? (disrecommended)") {
+                        eprint!("ERROR: Failed to deserialize data: {:?}.\nSTATUS: Corrupted data may be lost. ", e);
+                        if ask("Do you want to continue and overwrite the saved data? (disrecommended)") {
                             println!("Data will be overwritten.");
                         } else {
-                            println!("To fix the problem, visit the Github repos after trying to launch the program again. Feel free to ask for help.");
+                            println!("To fix the problem, visit the Github repos. Feel free to ask for help.");
                             std::process::exit(74);
                         };
-                    }
+                    },
                 }
             }
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
@@ -196,10 +184,11 @@ fn main() {
 
         let mut success = false;
         while !success {
-            if let Ok(mut file) = File::create("guilds.bincode") {
-                if let Ok(data) = bincode::serialize(&guilds) {
-                    if let Ok(()) = file.write_all(&data) {
-                        success = true;
+            if let Ok(file) = File::create("guilds.cbor") {
+                match serde_cbor::to_writer(file, &guilds) {
+                    Ok(()) => success = true,
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to save data: {:?}", e);
                     }
                 }
             }
