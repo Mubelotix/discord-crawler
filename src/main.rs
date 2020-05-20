@@ -113,18 +113,29 @@ fn main() {
             };
         }
         
+        let mut loaded_links = Vec::new();
         let mut progress_bar = ProgressBar::new(links.len());
         for link in links {
             progress_bar.set_action("Waiting", Color::Yellow, Style::Normal);
             sleep(Duration::from_secs(6));
             progress_bar.set_action("Loading", Color::Blue, Style::Bold);
 
-            progress_bar.set_action("Verifying", Color::Green, Style::Normal);
             if let Ok(links) = intermediary::resolve(&link) {
+                let mut requires_cooldown = false;
                 for invite_link in links {
-                    if let Ok(invite) = discord::Invite::fetch(&invite_link) {
-                        progress_bar.print_info("Found", &format!("invite to {}: {}", &invite.guild.as_ref().map(|g| &g.name).unwrap_or(&"Unknown".to_string()), invite.get_url()), Color::Green, Style::Bold);
-                        guilds.push(Entry::from(invite));
+                    if !loaded_links.contains(&invite_link) {
+                        if requires_cooldown {
+                            progress_bar.set_action("Waiting", Color::Yellow, Style::Normal);
+                            sleep(Duration::from_secs(6));
+                        }
+                        progress_bar.set_action("Verifying", Color::Green, Style::Normal);
+                        
+                        if let Ok(invite) = discord::Invite::fetch(&invite_link) {
+                            progress_bar.print_info("Found", &format!("invite to {}: {}", &invite.guild.as_ref().map(|g| &g.name).unwrap_or(&"Unknown".to_string()), invite.get_url()), Color::Green, Style::Bold);
+                            guilds.push(Entry::from(invite));
+                        }
+                        requires_cooldown = true;
+                        loaded_links.push(invite_link);
                     }
                 }
             }
