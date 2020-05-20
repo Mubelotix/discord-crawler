@@ -85,13 +85,18 @@ fn main() {
         let start_timestamp = SystemTime::now();
         let mut guilds: Vec<Entry> = Vec::new();
 
+        let mut success = false;
         if let Ok(mut file) = File::open("guilds.bincode") {
             let mut content = Vec::new();
             if let Ok(_t) = file.read_to_end(&mut content) {
                 if let Ok(saved_guilds) = bincode::deserialize(&content) {
                     guilds = saved_guilds;
+                    success = true;
                 }
             }
+        }
+        if !success {
+            eprintln!("Failed to read database.");
         }
 
         let mut links: Vec<String> = Vec::new();
@@ -147,17 +152,40 @@ fn main() {
         guilds.sort();
         guilds.dedup();
 
-        if let Ok(mut file) = File::create("guilds.bincode") {
-            if let Ok(data) = bincode::serialize(&guilds) {
-                if let Ok(()) = file.write_all(&data) {
-
+        let mut success = false;
+        while !success {
+            if let Ok(mut file) = File::create("guilds.bincode") {
+                if let Ok(data) = bincode::serialize(&guilds) {
+                    if let Ok(()) = file.write_all(&data) {
+                        success = true;
+                    }
                 }
+            }
+            if !success {
+                eprintln!("Failed to save database. Press Enter to retry.");
+                std::io::stdin().read_line(&mut String::new()).unwrap();
             }
         }
         
         let client = Client::new(host, key);
-        let mut index = client.get_or_create(index).unwrap();
-        index.add_documents(guilds, Some("entry_id")).unwrap();
+        match client.get_or_create(index) {
+            Ok(mut index) => match index.delete_all_documents() {
+                Ok(_progress) => match index.add_documents(guilds, Some("entry_id")) {
+                    Ok(_progress) => {
+                        // success
+                    },
+                    Err(e) => {
+                        eprintln!("ERROR: Failed to add documents to the index: {:?}\nSTATE: Index is empty.", e);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("ERROR: Failed to remove outdated documents of the index: {:?}\nSTATE: Index is outdated.", e);
+                }
+            },
+            Err(e) => {
+                eprintln!("ERROR: Failed to get or create the index: {:?}\nSTATE: Index is out of control.", e);
+            }
+        }
         
         sleep(Duration::from_secs(3600u64.saturating_sub(SystemTime::now().duration_since(start_timestamp).unwrap().as_secs())))
     }
