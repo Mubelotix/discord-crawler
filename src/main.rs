@@ -10,6 +10,19 @@ const MAJOR: u32 = pkg_version_major!();
 const MINOR: u32 = pkg_version_minor!();
 const PATCH: u32 = pkg_version_patch!();
 
+fn ask(question: &str) -> bool {
+    println!("{} (Yes / No)", question);
+    loop { 
+        let mut answer = String::new();
+        std::io::stdin().read_line(&mut answer).unwrap();
+        match answer.trim() {
+            "y" | "Y" | "Yes" | "yes" | "YES" => return true,
+            "n" | "N" | "No" | "no" | "NO" => return false,
+            _ => println!("invalid answer")
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
     update_timestamp: u64,
@@ -85,18 +98,47 @@ fn main() {
         let start_timestamp = SystemTime::now();
         let mut guilds: Vec<Entry> = Vec::new();
 
-        let mut success = false;
-        if let Ok(mut file) = File::open("guilds.bincode") {
-            let mut content = Vec::new();
-            if let Ok(_t) = file.read_to_end(&mut content) {
-                if let Ok(saved_guilds) = bincode::deserialize(&content) {
-                    guilds = saved_guilds;
-                    success = true;
+        match File::open("guilds.bincode") {
+            Ok(mut file) => {
+                let mut content = Vec::new();
+                match file.read_to_end(&mut content) {
+                    Ok(_bytes) => match bincode::deserialize(&content) {
+                        Ok(saved_guilds) => {
+                            guilds = saved_guilds;
+                        },
+                        Err(e) => {
+                            eprint!("ERROR: Failed to deserialize data: {:?}.\nSTATUS: Corrupted data may be lost. ", e);
+                            if ask("Do you want to continue and overwrite the saved data? (disrecommended)") {
+                                println!("Data will be overwritten.");
+                            } else {
+                                println!("To fix the problem, visit the Github repos. Feel free to ask for help.");
+                                std::process::exit(74);
+                            };
+                        }
+                    },
+                    Err(e) => {
+                        eprint!("ERROR: Failed to read data: {:?}.\nSTATUS: Potential data loss. ", e);
+                        if ask("Do you want to continue and overwrite the saved data (which cannot be read) ? (disrecommended)") {
+                            println!("Data will be overwritten.");
+                        } else {
+                            println!("To fix the problem, visit the Github repos after trying to launch the program again. Feel free to ask for help.");
+                            std::process::exit(74);
+                        };
+                    }
                 }
             }
-        }
-        if !success {
-            eprintln!("Failed to read database.");
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                eprint!("ERROR: Failed to open file: {:?}.\nSTATUS: Potential data loss. ", e);
+                if ask("Do you want to continue and ignore the saved data (may be overwritten) ? (disrecommended)") {
+                    println!("Ignoring data.");
+                } else {
+                    println!("To fix the problem, visit the Github repos after trying to launch the program again. Feel free to ask for help.");
+                    std::process::exit(74);
+                };
+            }
+            Err(_e) => {
+                eprintln!("ERROR: Database file not found.\nSTATUS: It will be created later.");
+            }
         }
 
         let mut links: Vec<String> = Vec::new();
@@ -175,15 +217,15 @@ fn main() {
                         // success
                     },
                     Err(e) => {
-                        eprintln!("ERROR: Failed to add documents to the index: {:?}\nSTATE: Index is empty.", e);
+                        eprintln!("ERROR: Failed to add documents to the index: {:?}\nSTATUS: Index is empty.", e);
                     }
                 }
                 Err(e) => {
-                    eprintln!("ERROR: Failed to remove outdated documents of the index: {:?}\nSTATE: Index is outdated.", e);
+                    eprintln!("ERROR: Failed to remove outdated documents of the index: {:?}\nSTATUS: Index is outdated.", e);
                 }
             },
             Err(e) => {
-                eprintln!("ERROR: Failed to get or create the index: {:?}\nSTATE: Index is out of control.", e);
+                eprintln!("ERROR: Failed to get or create the index: {:?}\nSTATUS: Index is out of control.", e);
             }
         }
         
